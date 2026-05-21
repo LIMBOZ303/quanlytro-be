@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Room {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  rentPrice    Float
+  serviceFee   Float
+  status       String        @default("Trống") // "Trống" hoặc "Đã thuê"
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tenants      Tenant[]
+  monthlyBills MonthlyBill[]
+}
+
+model Tenant {
+  id        Int      @id @default(autoincrement())
+  fullName  String
+  birthYear Int
+  hometown  String
+  idCard    String   @unique
+  phone     String
+  roomId    Int?
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MonthlyBill {
+  id               Int      @id @default(autoincrement())
+  roomId           Int
+  room             Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  month            Int
+  year             Int
+  electricityOld   Int
+  electricityNew   Int
+  waterOld         Int
+  waterNew         Int
+  electricityPrice Float
+  waterPrice       Float
+  totalAmount      Float
+  status           String   @default("Chưa thanh toán") // "Chưa thanh toán" hoặc "Đã thanh toán"
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([roomId, month, year])
+}
