@@ -5,6 +5,10 @@ const morgan = require('morgan');
 const { PrismaClient } = require('@prisma/client');
 const { calculateRoomBill } = require('./utils/billCalculator');
 const { validateBillInput } = require('./utils/billValidator');
+const {
+  validateTenantInput,
+  isPrismaUniqueIdCardError,
+} = require('./utils/tenantValidator');
 const authRoutes = require('./routes/auth');
 const authMiddleware = require('./middlewares/authMiddleware');
 
@@ -88,14 +92,44 @@ app.get('/api/tenants', async (req, res) => {
 app.post('/api/tenants', async (req, res) => {
   try {
     const { fullName, birthYear, hometown, idCard, phone, roomId } = req.body;
+
+    const validation = validateTenantInput(
+      { fullName, birthYear, hometown, idCard, phone, roomId },
+      { isCreate: true }
+    );
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.errors[0],
+      });
+    }
+
+    const { parsed } = validation;
     const tenant = await prisma.tenant.create({
-      data: { fullName, birthYear: Number(birthYear), hometown, idCard, phone, roomId: roomId ? Number(roomId) : null }
+      data: {
+        fullName: parsed.fullName,
+        birthYear: parsed.birthYear,
+        hometown: parsed.hometown,
+        idCard: parsed.idCard,
+        phone: parsed.phone,
+        roomId: parsed.roomId ?? null,
+      },
     });
-    if (roomId) {
-      await prisma.room.update({ where: { id: Number(roomId) }, data: { status: 'Đã thuê' } });
+    if (parsed.roomId) {
+      await prisma.room.update({
+        where: { id: parsed.roomId },
+        data: { status: 'Đã thuê' },
+      });
     }
     res.json(tenant);
   } catch (err) {
+    if (isPrismaUniqueIdCardError(err)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Căn cước công dân này đã tồn tại.',
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -104,15 +138,54 @@ app.put('/api/tenants/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { fullName, birthYear, hometown, idCard, phone, roomId } = req.body;
+
+    const validation = validateTenantInput({
+      fullName,
+      birthYear,
+      hometown,
+      idCard,
+      phone,
+      roomId,
+    });
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.errors[0],
+      });
+    }
+
+    const { parsed } = validation;
+    const updateData = {};
+    if (parsed.fullName !== undefined) updateData.fullName = parsed.fullName;
+    if (parsed.birthYear !== undefined) updateData.birthYear = parsed.birthYear;
+    if (parsed.hometown !== undefined) updateData.hometown = parsed.hometown;
+    if (parsed.idCard !== undefined) updateData.idCard = parsed.idCard;
+    if (parsed.phone !== undefined) updateData.phone = parsed.phone;
+    if (parsed.roomId !== undefined) {
+      updateData.roomId = parsed.roomId;
+    } else if (roomId === null || roomId === '') {
+      updateData.roomId = null;
+    }
+
     const tenant = await prisma.tenant.update({
       where: { id: Number(id) },
-      data: { fullName, birthYear: Number(birthYear), hometown, idCard, phone, roomId: roomId ? Number(roomId) : null }
+      data: updateData,
     });
-    if (roomId) {
-      await prisma.room.update({ where: { id: Number(roomId) }, data: { status: 'Đã thuê' } });
+    if (parsed.roomId) {
+      await prisma.room.update({
+        where: { id: parsed.roomId },
+        data: { status: 'Đã thuê' },
+      });
     }
     res.json(tenant);
   } catch (err) {
+    if (isPrismaUniqueIdCardError(err)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Căn cước công dân này đã tồn tại.',
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
