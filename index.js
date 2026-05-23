@@ -5,6 +5,8 @@ const morgan = require('morgan');
 const { PrismaClient } = require('@prisma/client');
 const { calculateRoomBill } = require('./utils/billCalculator');
 const { validateBillInput } = require('./utils/billValidator');
+const authRoutes = require('./routes/auth');
+const authMiddleware = require('./middlewares/authMiddleware');
 
 const prisma = new PrismaClient({});
 const app = express();
@@ -17,6 +19,15 @@ app.use(morgan('dev'));
 app.get('/', (req, res) => {
   res.send('API Quản lý phòng trọ is running');
 });
+
+// Auth API (public)
+app.use('/api/auth', authRoutes);
+
+// Protected management APIs
+app.use('/api/rooms', authMiddleware);
+app.use('/api/tenants', authMiddleware);
+app.use('/api/bills', authMiddleware);
+app.use('/api/dashboard', authMiddleware);
 
 // Rooms API
 app.get('/api/rooms', async (req, res) => {
