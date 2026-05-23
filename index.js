@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const { PrismaClient } = require('@prisma/client');
+const { calculateRoomBill } = require('./utils/billCalculator');
+const { validateBillInput } = require('./utils/billValidator');
 
 const prisma = new PrismaClient({});
 const app = express();
@@ -137,33 +139,122 @@ app.get('/api/bills', async (req, res) => {
 
 app.post('/api/bills', async (req, res) => {
   try {
-    const { roomId, month, year, electricityOld, electricityNew, waterOld, waterNew, electricityPrice, waterPrice } = req.body;
-    
-    const room = await prisma.room.findUnique({ where: { id: Number(roomId) } });
-    if (!room) return res.status(404).json({ error: "Room not found" });
+    const {
+      roomId,
+      month,
+      year,
+      electricityOld,
+      electricityNew,
+      waterOld,
+      waterNew,
+      electricityPrice,
+      waterPrice,
+      status,
+    } = req.body;
 
-    const totalAmount = (electricityNew - electricityOld) * electricityPrice + 
-                        (waterNew - waterOld) * waterPrice + 
-                        room.rentPrice + 
-                        room.serviceFee;
+    const validation = validateBillInput({
+      roomId,
+      month,
+      year,
+      electricityOld,
+      electricityNew,
+      waterOld,
+      waterNew,
+      electricityPrice,
+      waterPrice,
+    });
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.errors[0],
+      });
+    }
+
+    const parsed = validation.parsed;
+
+    const room = await prisma.room.findUnique({ where: { id: parsed.roomId } });
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: 'Phòng không tồn tại',
+      });
+    }
+
+    const existingBill = await prisma.monthlyBill.findUnique({
+      where: {
+        roomId_month_year: {
+          roomId: parsed.roomId,
+          month: parsed.month,
+          year: parsed.year,
+        },
+      },
+    });
+
+    if (existingBill) {
+      return res.status(409).json({
+        success: false,
+        message: 'Hóa đơn cho phòng này trong tháng/năm đã tồn tại',
+      });
+    }
+
+    const billCalculation = calculateRoomBill({
+      rentPrice: room.rentPrice,
+      serviceFee: room.serviceFee,
+      electricityOld: parsed.electricityOld,
+      electricityNew: parsed.electricityNew,
+      electricityPrice: parsed.electricityPrice,
+      waterOld: parsed.waterOld,
+      waterNew: parsed.waterNew,
+      waterPrice: parsed.waterPrice,
+    });
+
+    const billStatus =
+      status === 'Đã thanh toán' ? 'Đã thanh toán' : 'Chưa thanh toán';
 
     const bill = await prisma.monthlyBill.create({
       data: {
-        roomId: Number(roomId),
-        month: Number(month),
-        year: Number(year),
-        electricityOld: Number(electricityOld),
-        electricityNew: Number(electricityNew),
-        waterOld: Number(waterOld),
-        waterNew: Number(waterNew),
-        electricityPrice: Number(electricityPrice),
-        waterPrice: Number(waterPrice),
-        totalAmount,
-      }
+        roomId: parsed.roomId,
+        month: parsed.month,
+        year: parsed.year,
+        electricityOld: parsed.electricityOld,
+        electricityNew: parsed.electricityNew,
+        waterOld: parsed.waterOld,
+        waterNew: parsed.waterNew,
+        electricityPrice: parsed.electricityPrice,
+        waterPrice: parsed.waterPrice,
+        electricityUsage: billCalculation.electricityUsage,
+        electricityAmount: billCalculation.electricityAmount,
+        waterUsage: billCalculation.waterUsage,
+        waterAmount: billCalculation.waterAmount,
+        totalAmount: billCalculation.totalAmount,
+        status: billStatus,
+      },
+      include: { room: true },
     });
-    res.json(bill);
+
+    const response = {
+      success: true,
+      message: 'Tạo hóa đơn thành công',
+      data: bill,
+    };
+
+    if (validation.warnings.length > 0) {
+      response.warnings = validation.warnings;
+    }
+
+    res.status(201).json(response);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'Hóa đơn cho phòng này trong tháng/năm đã tồn tại',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 });
 
@@ -171,13 +262,36 @@ app.put('/api/bills/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (!status || !['Chưa thanh toán', 'Đã thanh toán'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'status phải là "Chưa thanh toán" hoặc "Đã thanh toán"',
+      });
+    }
+
     const bill = await prisma.monthlyBill.update({
       where: { id: Number(id) },
-      data: { status }
+      data: { status },
+      include: { room: true },
     });
-    res.json(bill);
+
+    res.json({
+      success: true,
+      message: 'Cập nhật trạng thái hóa đơn thành công',
+      data: bill,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'Hóa đơn không tồn tại',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 });
 

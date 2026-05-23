@@ -46,9 +46,13 @@ model MonthlyBill {
   electricityNew   Int
   waterOld         Int
   waterNew         Int
-  electricityPrice Float
-  waterPrice       Float
-  totalAmount      Float
+  electricityPrice  Float
+  waterPrice        Float
+  electricityUsage  Float
+  electricityAmount Float
+  waterUsage        Float
+  waterAmount       Float
+  totalAmount       Float
   status           String   @default("Chưa thanh toán") // "Chưa thanh toán" hoặc "Đã thanh toán"
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
