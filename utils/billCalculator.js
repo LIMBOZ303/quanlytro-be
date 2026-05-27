@@ -10,6 +10,12 @@ function calculateWaterByMeter(oldNumber, newNumber, unitPrice) {
   return { usage, amount };
 }
 
+function calculateWaterByPerson(numberOfPeople, pricePerPerson) {
+  const usage = null;
+  const amount = numberOfPeople * pricePerPerson;
+  return { usage, amount };
+}
+
 function calculateRoomBill({
   rentPrice,
   serviceFee,
@@ -19,9 +25,14 @@ function calculateRoomBill({
   waterOld,
   waterNew,
   waterPrice,
+  waterBillingType = 'METER',
+  waterPeopleCount,
 }) {
   const electricity = calculateElectricityFixed(electricityOld, electricityNew, electricityPrice);
-  const water = calculateWaterByMeter(waterOld, waterNew, waterPrice);
+  const water =
+    waterBillingType === 'PER_PERSON'
+      ? calculateWaterByPerson(waterPeopleCount ?? 1, waterPrice)
+      : calculateWaterByMeter(waterOld, waterNew, waterPrice);
 
   const totalAmount =
     rentPrice + serviceFee + electricity.amount + water.amount;
@@ -38,5 +49,6 @@ function calculateRoomBill({
 module.exports = {
   calculateElectricityFixed,
   calculateWaterByMeter,
+  calculateWaterByPerson,
   calculateRoomBill,
 };

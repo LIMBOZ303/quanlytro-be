@@ -46,11 +46,13 @@ model MonthlyBill {
   electricityNew   Int
   waterOld         Int
   waterNew         Int
+  waterBillingType String   @default("METER")
+  waterPeopleCount Int?
   electricityPrice  Float
   waterPrice        Float
   electricityUsage  Float
   electricityAmount Float
-  waterUsage        Float
+  waterUsage        Float?
   waterAmount       Float
   totalAmount       Float
   status           String   @default("Chưa thanh toán") // "Chưa thanh toán" hoặc "Đã thanh toán"

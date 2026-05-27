@@ -51,6 +51,18 @@ app.post('/api/rooms', async (req, res) => {
     });
     res.json(room);
   } catch (err) {
+    if (err?.code === 'P2002') {
+      const target = err.meta?.target;
+      const isName =
+        !target ||
+        (Array.isArray(target) ? target.includes('name') : target === 'name');
+      if (isName) {
+        return res.status(409).json({
+          success: false,
+          message: 'Tên phòng này đã tồn tại. Vui lòng chọn tên phòng khác.',
+        });
+      }
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -65,6 +77,18 @@ app.put('/api/rooms/:id', async (req, res) => {
     });
     res.json(room);
   } catch (err) {
+    if (err?.code === 'P2002') {
+      const target = err.meta?.target;
+      const isName =
+        !target ||
+        (Array.isArray(target) ? target.includes('name') : target === 'name');
+      if (isName) {
+        return res.status(409).json({
+          success: false,
+          message: 'Tên phòng này đã tồn tại. Vui lòng chọn tên phòng khác.',
+        });
+      }
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -231,6 +255,8 @@ app.post('/api/bills', async (req, res) => {
       electricityNew,
       waterOld,
       waterNew,
+      waterBillingType,
+      waterPeopleCount,
       electricityPrice,
       waterPrice,
       status,
@@ -244,6 +270,8 @@ app.post('/api/bills', async (req, res) => {
       electricityNew,
       waterOld,
       waterNew,
+      waterBillingType,
+      waterPeopleCount,
       electricityPrice,
       waterPrice,
     });
@@ -282,6 +310,22 @@ app.post('/api/bills', async (req, res) => {
       });
     }
 
+    let resolvedWaterPeopleCount = parsed.waterPeopleCount;
+    const warnings = [...validation.warnings];
+    if (parsed.waterBillingType === 'PER_PERSON' && !resolvedWaterPeopleCount) {
+      const tenantCount = await prisma.tenant.count({
+        where: { roomId: parsed.roomId },
+      });
+      if (tenantCount > 0) {
+        resolvedWaterPeopleCount = tenantCount;
+      } else {
+        resolvedWaterPeopleCount = 1;
+        warnings.push(
+          'Không có tenant trong phòng, hệ thống tạm tính waterPeopleCount = 1'
+        );
+      }
+    }
+
     const billCalculation = calculateRoomBill({
       rentPrice: room.rentPrice,
       serviceFee: room.serviceFee,
@@ -291,6 +335,8 @@ app.post('/api/bills', async (req, res) => {
       waterOld: parsed.waterOld,
       waterNew: parsed.waterNew,
       waterPrice: parsed.waterPrice,
+      waterBillingType: parsed.waterBillingType,
+      waterPeopleCount: resolvedWaterPeopleCount,
     });
 
     const billStatus =
@@ -305,6 +351,8 @@ app.post('/api/bills', async (req, res) => {
         electricityNew: parsed.electricityNew,
         waterOld: parsed.waterOld,
         waterNew: parsed.waterNew,
+        waterBillingType: parsed.waterBillingType,
+        waterPeopleCount: resolvedWaterPeopleCount ?? null,
         electricityPrice: parsed.electricityPrice,
         waterPrice: parsed.waterPrice,
         electricityUsage: billCalculation.electricityUsage,
@@ -323,8 +371,8 @@ app.post('/api/bills', async (req, res) => {
       data: bill,
     };
 
-    if (validation.warnings.length > 0) {
-      response.warnings = validation.warnings;
+    if (warnings.length > 0) {
+      response.warnings = warnings;
     }
 
     res.status(201).json(response);

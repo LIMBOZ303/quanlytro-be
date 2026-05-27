@@ -3,7 +3,7 @@ const CITIZEN_ID_REGEX = /^\d{12}$/;
 const MIN_BIRTH_YEAR = 1900;
 
 const PHONE_ERROR_MESSAGE =
-  'Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam gồm 10 chữ số và bắt đầu bằng 0.';
+  'Số điện thoại không hợp lệ. Vui lòng nhập 10 chữ số và bắt đầu bằng 0.';
 const CITIZEN_ID_ERROR_MESSAGE =
   'Căn cước công dân không hợp lệ. Vui lòng nhập đúng 12 chữ số.';
 

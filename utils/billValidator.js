@@ -2,6 +2,8 @@ const ELECTRICITY_PRICE_WARNING_THRESHOLD = 10000;
 const WATER_PRICE_WARNING_THRESHOLD = 100000;
 const MIN_YEAR = 2000;
 
+const WATER_BILLING_TYPES = ['METER', 'PER_PERSON'];
+
 function validateBillInput(data) {
   const errors = [];
   const warnings = [];
@@ -14,6 +16,8 @@ function validateBillInput(data) {
     electricityNew,
     waterOld,
     waterNew,
+    waterBillingType,
+    waterPeopleCount,
     electricityPrice,
     waterPrice,
   } = data;
@@ -72,28 +76,48 @@ function validateBillInput(data) {
 
   const waterOldNum = Number(waterOld);
   const waterNewNum = Number(waterNew);
-  if (
-    waterOld === undefined ||
-    waterOld === null ||
-    waterOld === '' ||
-    Number.isNaN(waterOldNum)
-  ) {
-    errors.push('waterOld là bắt buộc');
+  const waterBillingTypeValue =
+    waterBillingType === undefined ||
+    waterBillingType === null ||
+    waterBillingType === ''
+      ? 'METER'
+      : String(waterBillingType).trim().toUpperCase();
+
+  if (!WATER_BILLING_TYPES.includes(waterBillingTypeValue)) {
+    errors.push('waterBillingType không hợp lệ (chỉ hỗ trợ "METER" hoặc "PER_PERSON")');
   }
-  if (
-    waterNew === undefined ||
-    waterNew === null ||
-    waterNew === '' ||
-    Number.isNaN(waterNewNum)
-  ) {
-    errors.push('waterNew là bắt buộc');
-  }
-  if (
-    !Number.isNaN(waterOldNum) &&
-    !Number.isNaN(waterNewNum) &&
-    waterNewNum < waterOldNum
-  ) {
-    errors.push('Chỉ số nước mới không được nhỏ hơn chỉ số nước cũ');
+
+  if (waterBillingTypeValue === 'METER') {
+    if (
+      waterOld === undefined ||
+      waterOld === null ||
+      waterOld === '' ||
+      Number.isNaN(waterOldNum)
+    ) {
+      errors.push('waterOld là bắt buộc');
+    }
+    if (
+      waterNew === undefined ||
+      waterNew === null ||
+      waterNew === '' ||
+      Number.isNaN(waterNewNum)
+    ) {
+      errors.push('waterNew là bắt buộc');
+    }
+    if (
+      !Number.isNaN(waterOldNum) &&
+      !Number.isNaN(waterNewNum) &&
+      waterNewNum < waterOldNum
+    ) {
+      errors.push('Chỉ số nước mới không được nhỏ hơn chỉ số nước cũ');
+    }
+  } else if (waterBillingTypeValue === 'PER_PERSON') {
+    if (
+      (waterOld === undefined || waterOld === null || waterOld === '') &&
+      (waterNew === undefined || waterNew === null || waterNew === '')
+    ) {
+      warnings.push('Không có waterOld/waterNew vì đang tính nước theo đầu người');
+    }
   }
 
   const electricityPriceNum = Number(electricityPrice);
@@ -124,6 +148,34 @@ function validateBillInput(data) {
     warnings.push('Đơn giá nước có vẻ quá cao, vui lòng kiểm tra lại');
   }
 
+  let waterPeopleCountNum;
+  if (
+    waterPeopleCount !== undefined &&
+    waterPeopleCount !== null &&
+    waterPeopleCount !== ''
+  ) {
+    waterPeopleCountNum = Number(waterPeopleCount);
+    if (
+      Number.isNaN(waterPeopleCountNum) ||
+      !Number.isInteger(waterPeopleCountNum) ||
+      waterPeopleCountNum < 1
+    ) {
+      errors.push('waterPeopleCount phải là số nguyên >= 1');
+    }
+  }
+
+  const parsedWaterOld =
+    waterBillingTypeValue === 'PER_PERSON' &&
+    (waterOld === undefined || waterOld === null || waterOld === '' || Number.isNaN(waterOldNum))
+      ? 0
+      : waterOldNum;
+
+  const parsedWaterNew =
+    waterBillingTypeValue === 'PER_PERSON' &&
+    (waterNew === undefined || waterNew === null || waterNew === '' || Number.isNaN(waterNewNum))
+      ? 0
+      : waterNewNum;
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -134,8 +186,10 @@ function validateBillInput(data) {
       year: yearNum,
       electricityOld: electricityOldNum,
       electricityNew: electricityNewNum,
-      waterOld: waterOldNum,
-      waterNew: waterNewNum,
+      waterOld: parsedWaterOld,
+      waterNew: parsedWaterNew,
+      waterBillingType: waterBillingTypeValue,
+      waterPeopleCount: waterPeopleCountNum,
       electricityPrice: electricityPriceNum,
       waterPrice: waterPriceNum,
     },
@@ -146,4 +200,5 @@ module.exports = {
   validateBillInput,
   ELECTRICITY_PRICE_WARNING_THRESHOLD,
   WATER_PRICE_WARNING_THRESHOLD,
+  WATER_BILLING_TYPES,
 };
